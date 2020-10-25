@@ -2,20 +2,18 @@ CWD := $(shell pwd)
 
 ANSIBLE_VERSION ?= 2.9.14
 
-IMAGE_NAME ?= sndsgd/docker-ansible-playbook
+IMAGE_NAME ?= sndsgd/ansible-playbook
 IMAGE := $(IMAGE_NAME):$(ANSIBLE_VERSION)
 
 USER_SSH_DIR ?= $(HOME)/.ssh
 
 OS_NAME=$(shell uname)
-ifeq ($(OS_NAME),Linux)
-	SSH_AGENT_SOCK = $(SSH_AUTH_SOCK)
-	HOST_IP ?= $(shell hostname -I | cut -d' ' -f1)
-else ($(OS_NAME),Darwin)
+ifeq ($(OS_NAME),Darwin)
 	SSH_AGENT_SOCK = /run/host-services/ssh-auth.sock
 	HOST_IP ?= $(shell ifconfig en0 | grep inet | grep -v inet6 | awk '{print $$2}')
 else
-	$(error unknown host os is not supported)
+	SSH_AGENT_SOCK = $(SSH_AUTH_SOCK)
+	HOST_IP ?= $(shell hostname -I | cut -d' ' -f1)
 endif
 
 .PHONY: help
