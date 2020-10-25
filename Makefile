@@ -75,6 +75,7 @@ test: image ensure-key-is-authorized
 test-local: ## Test against the container from within the container
 test-local: image
 	@docker run --rm -it \
+		-e ANSIBLE_PYTHON_INTERPRETER=/usr/bin/python3 \
 		-v $(CWD):$(CWD) \
 		-w $(CWD) \
 		$(IMAGE) \
