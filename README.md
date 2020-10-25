@@ -11,5 +11,4 @@ If you want to build the image locally, you can follow these steps:
 
 ### Usage
 
-Take a look at the `test-host` target in the [Makefile](./Makefile) to get an
-idea of how this can be used.
+Take a look at the `test-host` target in the [Makefile](../../blob/34b1524c837b84f6bf1f87ee2f88451cc32796da/Makefile#L56-L72) to get an idea of how this can be used.
