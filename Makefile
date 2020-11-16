@@ -1,6 +1,7 @@
+SHELL := /usr/bin/env bash
 CWD := $(shell pwd)
 
-ANSIBLE_VERSION ?= 2.9.14
+ANSIBLE_VERSION ?= 2.10.3
 
 IMAGE_NAME ?= sndsgd/ansible-playbook
 IMAGE := $(IMAGE_NAME):$(ANSIBLE_VERSION)
@@ -25,11 +26,10 @@ help:
 IMAGE_ARGS ?= --quiet
 .PHONY: image
 image: ## Build the docker image
-	@echo "building image..."
+	@echo "building ansible v$(ANSIBLE_VERSION) image ..."
 	@docker build \
 	  $(IMAGE_ARGS) \
 		--build-arg ANSIBLE_VERSION=$(ANSIBLE_VERSION) \
-		--tag $(IMAGE_NAME):latest \
 		--tag $(IMAGE) \
 		$(CWD)
 
@@ -37,7 +37,24 @@ image: ## Build the docker image
 push: ## Push the docker image
 push: test-local
 	@docker push $(IMAGE)
-	@docker push $(IMAGE_NAME):latest
+
+VERSION_URL ?= https://github.com/ansible/ansible/tags
+VERSION_PATTERN ?= '(?<=href="/ansible/ansible/releases/tag/v)[^"rc]+(?=")'
+ANSIBLE_VERSIONS = $(shell curl -s $(VERSION_URL) | grep -Po $(VERSION_PATTERN) | tr '\n' ' ')
+IMAGE_CHECK_URL = https://index.docker.io/v1/repositories/$(IMAGE_NAME)/tags/%s
+.PHONY: push-cron
+push-cron: ## Fetch latest tags, build and push images if they do not already exist
+	for version in $(ANSIBLE_VERSIONS); \
+	do \
+		echo -n "checking $$version... "; \
+		curl --silent -f -lSL $$(printf $(IMAGE_CHECK_URL) "$$version") &> /dev/null; \
+		if [ $$? -eq 0 ]; then \
+			echo "aleady exists"; \
+		else \
+			echo "not found; building..."; \
+			make --no-print-directory push ANSIBLE_VERSION="$$version" IMAGE_ARGS=--no-cache; \
+		fi; \
+	done
 
 TEST_PLAYBOOK ?= test.yml
 TEST_PORT ?= 22

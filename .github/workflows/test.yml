@@ -1,0 +1,17 @@
+name: test
+
+on:
+  push:
+    branches: ["*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+      with:
+        fetch-depth: 1
+    - name: Run `make help`
+      run: make help
+    - name: Run `make test-local`
+      run: make test-local IMAGE_ARGS=
