@@ -33,7 +33,7 @@ help:
 IMAGE_ARGS ?= --quiet
 .PHONY: image
 image: ## Build the docker image
-	@echo "building ansible v$(ANSIBLE_VERSION) image ..."
+	@echo "building ansible v$(ANSIBLE_VERSION) image..."
 	@docker build \
 	  $(IMAGE_ARGS) \
 		--build-arg ANSIBLE_VERSION=$(ANSIBLE_VERSION) \
