@@ -3,12 +3,9 @@ FROM python:3.8-alpine
 ARG ANSIBLE_VERSION
 
 ENV ANSIBLE_GATHERING smart
-ENV ANSIBLE_HOST_KEY_CHECKING False
 ENV ANSIBLE_PYTHON_INTERPRETER /usr/bin/python
 ENV ANSIBLE_RETRY_FILES_ENABLED False
 ENV ANSIBLE_SSH_PIPELINING True
-ENV PATH /ansible/bin:$PATH
-ENV PYTHONPATH /ansible/lib
 
 RUN \
   apk add --update --no-cache --virtual dependencies \
