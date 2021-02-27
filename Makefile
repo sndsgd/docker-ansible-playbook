@@ -48,7 +48,7 @@ push: test-local
 VERSION_URL ?= https://github.com/ansible/ansible/tags
 VERSION_PATTERN ?= '(?<=href="/ansible/ansible/releases/tag/v)[^"rc]+(?=")'
 ANSIBLE_VERSIONS = $(shell curl -s $(VERSION_URL) | grep -Po $(VERSION_PATTERN) | tr '\n' ' ')
-IMAGE_CHECK_URL = https://index.docker.io/v1/repositories/$(IMAGE_NAME)/tags/%s
+IMAGE_CHECK_URL = https://hub.docker.com/v2/repositories/$(IMAGE_NAME)/tags/%s
 .PHONY: push-cron
 push-cron: ## Fetch latest tags, build and push images if they do not already exist
 	for version in $(ANSIBLE_VERSIONS); \
