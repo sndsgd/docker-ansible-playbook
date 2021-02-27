@@ -1,4 +1,4 @@
-FROM alpine:3.12
+FROM python:3.8-alpine
 
 ARG ANSIBLE_VERSION
 
@@ -9,6 +9,7 @@ ENV ANSIBLE_RETRY_FILES_ENABLED False
 ENV ANSIBLE_SSH_PIPELINING True
 ENV PATH /ansible/bin:$PATH
 ENV PYTHONPATH /ansible/lib
+ENV CRYPTOGRAPHY_DONT_BUILD_RUST 1
 
 RUN \
   apk add --update --no-cache \
@@ -17,13 +18,11 @@ RUN \
     openssh-client \
     openssl-dev \
     git \
-    py3-pip \
-    python3-dev \
-  && pip3 install --upgrade --no-cache-dir \
+  && pip install --upgrade --no-cache-dir \
     pip \
     python-keyczar \
     setuptools \
     wheel \
-  && pip3 install --upgrade --no-cache-dir ansible==${ANSIBLE_VERSION}
+  && pip install --upgrade --no-cache-dir ansible==${ANSIBLE_VERSION}
 
 ENTRYPOINT ["ansible-playbook"]
