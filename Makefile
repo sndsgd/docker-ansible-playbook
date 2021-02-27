@@ -1,7 +1,7 @@
 SHELL := /usr/bin/env bash
 CWD := $(shell pwd)
 
-ANSIBLE_VERSION ?= 2.10.3
+ANSIBLE_VERSION ?= 2.10.6
 
 IMAGE_NAME ?= sndsgd/ansible-playbook
 IMAGE := $(IMAGE_NAME):$(ANSIBLE_VERSION)
