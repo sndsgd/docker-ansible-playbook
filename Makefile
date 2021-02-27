@@ -76,8 +76,8 @@ ensure-key-is-authorized:
 		|| cat $(USER_SSH_DIR)/id_rsa.pub >> $(USER_SSH_DIR)/authorized_keys
 
 .PHONY: test-host
-test: ## Test against your host machine using ssh from the container
-test: image ensure-key-is-authorized
+test-host: ## Test against your host machine using ssh from the container
+test-host: image ensure-key-is-authorized
 	docker run \
 		$(DOCKER_DEFAULT_OPTIONS) \
 		-v $(USER_SSH_DIR)/id_rsa:/root/.ssh/id_rsa \
@@ -97,9 +97,9 @@ test: image ensure-key-is-authorized
 .PHONY: test-local
 test-local: ## Test against the container from within the container
 test-local: image
-	@docker run \
+	docker run \
 		$(DOCKER_DEFAULT_OPTIONS) \
-		-e ANSIBLE_PYTHON_INTERPRETER=/usr/bin/python3 \
+		-e ANSIBLE_PYTHON_INTERPRETER=/usr/local/bin/python \
 		-v $(CWD):$(CWD) \
 		-w $(CWD) \
 		$(IMAGE) \

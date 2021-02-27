@@ -9,11 +9,13 @@ ENV ANSIBLE_RETRY_FILES_ENABLED False
 ENV ANSIBLE_SSH_PIPELINING True
 ENV PATH /ansible/bin:$PATH
 ENV PYTHONPATH /ansible/lib
-ENV CRYPTOGRAPHY_DONT_BUILD_RUST 1
 
 RUN \
-  apk add --update --no-cache \
+  apk add --update --no-cache --virtual dependencies \
+    rust \
+    cargo \
     g++ \
+  && apk add --no-cache \
     libffi-dev \
     openssh-client \
     openssl-dev \
@@ -23,6 +25,7 @@ RUN \
     python-keyczar \
     setuptools \
     wheel \
-  && pip install --upgrade --no-cache-dir ansible==${ANSIBLE_VERSION}
+  && pip install --upgrade --no-cache-dir ansible==${ANSIBLE_VERSION} \
+  && apk del --purge dependencies
 
 ENTRYPOINT ["ansible-playbook"]
