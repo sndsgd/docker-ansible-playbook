@@ -1,12 +1,66 @@
 SHELL := /usr/bin/env bash
 CWD := $(shell pwd)
 
-ANSIBLE_VERSION ?= 2.10.6
+PYTHON_VERSION ?= 3.13
+ANSIBLE_VERSION ?=
+FETCHED_ANSIBLE_VERSION ?=
 
-IMAGE_NAME ?= sndsgd/ansible-playbook
-IMAGE := $(IMAGE_NAME):$(ANSIBLE_VERSION)
+NAME := sndsgd/ansible-playbook
+IMAGE_NAME ?= ghcr.io/$(NAME)
+LATEST_IMAGE := $(IMAGE_NAME):latest
 
-USER_SSH_DIR ?= $(HOME)/.ssh
+.PHONY: help
+help:
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[33m%s\033[0m~%s\n", $$1, $$2}' \
+	| column -s "~" -t
+
+VERSION_URL ?= https://pypi.org/pypi/ansible/json
+.PHONY: ensure-version
+ensure-version:
+ifeq ($(ANSIBLE_VERSION),)
+	@$(info fetching latest version...)
+	@$(eval ANSIBLE_VERSION = $(shell curl -fsSL $(VERSION_URL) | jq -r .info.version))
+	@$(eval FETCHED_ANSIBLE_VERSION = $(ANSIBLE_VERSION))
+	@echo "found ansible version $(ANSIBLE_VERSION)"
+endif
+	@$(eval IMAGE := $(IMAGE_NAME):$(ANSIBLE_VERSION))
+
+IMAGE_ARGS ?= --quiet
+.PHONY: image
+image: ## Build the docker image
+image: ensure-version
+	@$(info building ansible v$(ANSIBLE_VERSION) image...)
+	@docker build \
+	  $(IMAGE_ARGS) \
+		--build-arg PYTHON_VERSION=$(PYTHON_VERSION) \
+		--build-arg ANSIBLE_VERSION=$(ANSIBLE_VERSION) \
+		--tag $(IMAGE) \
+		$(CWD)
+ifeq ($(ANSIBLE_VERSION),$(FETCHED_ANSIBLE_VERSION))
+	@docker tag $(IMAGE) $(LATEST_IMAGE)
+endif
+
+.PHONY: push
+push: ## Push the docker image
+push: test-local
+	docker push $(IMAGE)
+ifeq ($(ANSIBLE_VERSION),$(FETCHED_ANSIBLE_VERSION))
+	docker push $(LATEST_IMAGE)
+endif
+
+.PHONY: push-cron
+push-cron: ## Build and push an image if the version does not exist
+push-cron: ensure-version
+	@token_response="$$(curl --silent -f -lSL "https://ghcr.io/token?scope=repository:$(NAME):pull")"; \
+	token="$$(echo "$$token_response" | jq -r .token)"; \
+	json="$$(curl --silent -f -lSL -H "Authorization: Bearer $$token" https://ghcr.io/v2/$(NAME)/tags/list)"; \
+	index="$$(echo "$$json" | jq '.tags | index("$(ANSIBLE_VERSION)")')"; \
+	if [ "$$index" = "null" ] || [ -z "$$index" ]; then \
+		$(MAKE) --no-print-directory push ANSIBLE_VERSION=$(ANSIBLE_VERSION) FETCHED_ANSIBLE_VERSION=$(ANSIBLE_VERSION) IMAGE_ARGS=--no-cache; \
+	else \
+		echo "image for '$(ANSIBLE_VERSION)' already exists"; \
+	fi
 
 IS_TTY:=$(shell [ -t 0 ] && echo 1)
 ifdef IS_TTY
@@ -15,82 +69,38 @@ else
 	DOCKER_DEFAULT_OPTIONS ?= --rm
 endif
 
-OS_NAME=$(shell uname)
-ifeq ($(OS_NAME),Darwin)
-	SSH_AGENT_SOCK = /run/host-services/ssh-auth.sock
-	HOST_IP ?= $(shell ifconfig en0 | grep inet | grep -v inet6 | awk '{print $$2}')
-else
-	SSH_AGENT_SOCK = $(SSH_AUTH_SOCK)
-	HOST_IP ?= $(shell hostname -I | cut -d' ' -f1)
-endif
-
-.PHONY: help
-help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-	| awk 'BEGIN {FS = ":.*?## "}; {printf "\033[33m%s\033[0m~%s\n", $$1, $$2}' \
-	| column -s "~" -t
-
-IMAGE_ARGS ?= --quiet
-.PHONY: image
-image: ## Build the docker image
-	@echo "building ansible v$(ANSIBLE_VERSION) image..."
-	@docker build \
-	  $(IMAGE_ARGS) \
-		--build-arg ANSIBLE_VERSION=$(ANSIBLE_VERSION) \
-		--tag $(IMAGE) \
-		$(CWD)
-
-.PHONY: push
-push: ## Push the docker image
-push: test-local
-	@docker push $(IMAGE)
-
-VERSION_URL ?= https://github.com/ansible/ansible/tags
-VERSION_PATTERN ?= '(?<=href="/ansible/ansible/releases/tag/v)[^"brc]+(?=")'
-ANSIBLE_VERSIONS = $(shell curl -s $(VERSION_URL) | grep -Po $(VERSION_PATTERN) | tr '\n' ' ')
-IMAGE_CHECK_URL = https://hub.docker.com/v2/repositories/$(IMAGE_NAME)/tags/%s
-.PHONY: push-cron
-push-cron: ## Fetch latest tags, build and push images if they do not already exist
-	for version in $(ANSIBLE_VERSIONS); \
-	do \
-		echo -n "checking $$version... "; \
-		curl --silent -f -lSL $$(printf $(IMAGE_CHECK_URL) "$$version") &> /dev/null; \
-		if [ $$? -eq 0 ]; then \
-			echo "aleady exists"; \
-		else \
-			echo "not found; building..."; \
-			make --no-print-directory push ANSIBLE_VERSION="$$version" IMAGE_ARGS=--no-cache; \
-		fi; \
-	done
+USER_SSH_DIR ?= $(HOME)/.ssh
+SSH_AGENT_SOCK = $(SSH_AUTH_SOCK)
 
 TEST_PLAYBOOK ?= test.yml
+TEST_HOST ?=
 TEST_PORT ?= 22
+TEST_USER ?= $(shell whoami)
 TEST_EXTRA_VARS ?= '{}'
 
-# Used to ensure that the host's key is in the host's authorized_keys.
-# This allows you to share your pubkey into the container, and then use
-# it to hit your host machine from the container.
-.PHONY: ensure-key-is-authorized
-ensure-key-is-authorized:
-	@grep -q "$(shell awk '{$$1=$$1};1' $(USER_SSH_DIR)/id_rsa.pub)" $(USER_SSH_DIR)/authorized_keys \
-		|| cat $(USER_SSH_DIR)/id_rsa.pub >> $(USER_SSH_DIR)/authorized_keys
+.PHONY: ensure-test-host
+ensure-test-host:
+ifeq ($(TEST_HOST),)
+	$(error TEST_HOST is required, eg: make test-host TEST_HOST=example.com)
+endif
 
 .PHONY: test-host
-test-host: ## Test against your host machine using ssh from the container
-test-host: image ensure-key-is-authorized
+test-host: ## Test against TEST_HOST using ssh from the container
+test-host: ensure-test-host image
 	docker run \
 		$(DOCKER_DEFAULT_OPTIONS) \
 		-v $(USER_SSH_DIR)/id_rsa:/root/.ssh/id_rsa \
 		-v $(USER_SSH_DIR)/id_rsa.pub:/root/.ssh/id_rsa.pub \
+		-v $(USER_SSH_DIR)/known_hosts:/root/.ssh/known_hosts:ro \
 		-v $(SSH_AGENT_SOCK):$(SSH_AGENT_SOCK) \
 		-e SSH_AUTH_SOCK=$(SSH_AGENT_SOCK) \
 		-v $(CWD):$(CWD) \
 		-w $(CWD) \
 		$(IMAGE) \
-		--inventory $(HOST_IP), \
+		--inventory $(TEST_HOST), \
 		--extra-vars=ansible_port=$(TEST_PORT) \
 		--extra-vars=$(TEST_EXTRA_VARS) \
-		--user=$(shell whoami) \
+		--user=$(TEST_USER) \
 		--ask-become-pass \
 		$(TEST_PLAYBOOK)
 
@@ -116,4 +126,6 @@ run-help: image
 .PHONY: run-version
 run-version: ## Run `ansible-playbook --version`
 run-version: image
-	@docker run --rm $(IMAGE) --help
+	@docker run --rm $(IMAGE) --version
+
+.DEFAULT_GOAL := help

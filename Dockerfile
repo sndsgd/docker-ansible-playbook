@@ -1,28 +1,18 @@
-FROM python:3.8-alpine
+ARG PYTHON_VERSION=3.13
+FROM python:${PYTHON_VERSION}-alpine
+LABEL maintainer="sndsgd"
 
 ARG ANSIBLE_VERSION
 
-ENV ANSIBLE_GATHERING smart
-ENV ANSIBLE_PYTHON_INTERPRETER /usr/bin/python
-ENV ANSIBLE_RETRY_FILES_ENABLED False
-ENV ANSIBLE_SSH_PIPELINING True
+ENV ANSIBLE_GATHERING=smart
+ENV ANSIBLE_RETRY_FILES_ENABLED=False
+ENV ANSIBLE_SSH_PIPELINING=True
 
 RUN \
-  apk add --update --no-cache --virtual dependencies \
-    rust \
-    cargo \
-    g++ \
-  && apk add --no-cache \
-    libffi-dev \
-    openssh-client \
-    openssl-dev \
+  apk add --no-cache \
     git \
-  && pip install --upgrade --no-cache-dir \
-    pip \
-    python-keyczar \
-    setuptools \
-    wheel \
-  && pip install --upgrade --no-cache-dir ansible==${ANSIBLE_VERSION} \
-  && apk del --purge dependencies
+    openssh-client \
+  && pip install --upgrade --no-cache-dir pip \
+  && pip install --no-cache-dir ansible==${ANSIBLE_VERSION}
 
 ENTRYPOINT ["ansible-playbook"]
